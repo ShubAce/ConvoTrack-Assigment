@@ -99,11 +99,22 @@ COMPREHENSIVE ANALYSIS:
 Provide a strategic business analysis that includes:
 
 🎯 **Executive Summary**: Key takeaway in 2-3 sentences
-📊 **Data-Driven Insights**: Specific findings from the case studies with numbers/percentages when available
+
+📊 **Data-Driven Insights**: Specific findings from the case studies with numbers/percentages when available. Always include:
+- Engagement rates, conversion rates, or performance percentages when mentioned
+- Growth rates or changes over time with specific numbers
+- Comparative data between brands, platforms, or strategies
+- Market share data or competitive positioning metrics
+
 🚀 **Strategic Implications**: What this means for business strategy and market positioning
+
 💡 **Actionable Recommendations**: 3-4 specific, implementable actions
-🔮 **Future Outlook**: Trends and predictions based on the data
+
+🔮 **Future Outlook**: Trends and predictions based on the data with projected percentages when possible
+
 ⚠️ **Risk Considerations**: Potential challenges or limitations to consider
+
+IMPORTANT: When presenting data, always include specific numbers, percentages, and quantitative metrics from the case studies. Format numerical data clearly (e.g., "Brand A achieved 85% engagement vs Brand B's 72%") to enable data visualization.
 
 Write in a professional yet engaging tone. Use business terminology appropriately but ensure accessibility. Back up every claim with evidence from the case studies."""
         )
@@ -119,12 +130,14 @@ COMPARATIVE INTELLIGENCE DATA:
 COMPARISON REQUEST: {question}
 
 COMPARATIVE ANALYSIS:
-🔍 **Comparison Framework**: Establish clear criteria for comparison
-📊 **Side-by-Side Analysis**: Detailed comparison with specific metrics
-🏆 **Winner/Leader Analysis**: Which approach/strategy/brand performs better and why
-📈 **Performance Gaps**: Quantify differences where possible
-🎯 **Strategic Recommendations**: Which approach to adopt and why
-⚖️ **Trade-offs**: Pros and cons of each option
+🔍 **Comparison Framework**: Establish clear criteria for comparison with baseline metrics
+📊 **Side-by-Side Analysis**: Detailed comparison with specific metrics, percentages, and performance indicators (e.g., "Platform A: 85% engagement vs Platform B: 72% engagement")
+🏆 **Winner/Leader Analysis**: Which approach/strategy/brand performs better with quantified performance gaps
+📈 **Performance Gaps**: Quantify differences with exact percentages and ratios (e.g., "Strategy X outperformed by 23% margin")
+🎯 **Strategic Recommendations**: Which approach to adopt with expected performance improvements
+⚖️ **Trade-offs**: Pros and cons with risk/benefit percentages when available
+
+QUANTITATIVE EMPHASIS: Always provide numerical comparisons, percentage differences, performance ratios, and statistical metrics from the case studies. Format comparisons clearly for data visualization (e.g., "Brand A: 67%, Brand B: 54%, Industry Average: 45%").
 
 Provide specific data points, percentages, and concrete examples from the case studies."""
         )
@@ -140,15 +153,68 @@ TREND INTELLIGENCE DATA:
 TREND INQUIRY: {question}
 
 TREND ANALYSIS:
-📈 **Current State**: What the data shows about the present situation
-🔄 **Evolution Pattern**: How things have changed over time
-🚀 **Emerging Trends**: New developments and patterns identified
-📊 **Trend Drivers**: What's causing these changes (consumer behavior, technology, etc.)
-🎯 **Business Impact**: How these trends affect business strategy
-🔮 **Future Projections**: Where trends are heading (next 1-2 years)
-💰 **Revenue Opportunities**: How businesses can capitalize on these trends
+📈 **Current State**: What the data shows about the present situation with specific metrics and percentages
+🔄 **Evolution Pattern**: How things have changed over time with year-over-year growth rates and comparative data
+🚀 **Emerging Trends**: New developments and patterns identified with adoption rates and market penetration data
+📊 **Trend Drivers**: What's causing these changes (consumer behavior, technology, etc.) with supporting percentages
+🎯 **Business Impact**: How these trends affect business strategy with projected impact percentages
+🔮 **Future Projections**: Where trends are heading (next 1-2 years) with specific growth projections and timeframes
+💰 **Revenue Opportunities**: How businesses can capitalize on these trends with market size and opportunity percentages
+
+QUANTITATIVE FOCUS: Always include specific data points, growth rates, adoption percentages, market share figures, and comparative metrics from the case studies. Format data clearly (e.g., "Instagram engagement grew by 35% while TikTok increased by 67% year-over-year").
 
 Include specific examples and data points from case studies to support trend analysis."""
+        )
+        
+        # Strategic analysis template
+        self.strategic_prompt = PromptTemplate(
+            input_variables=["context", "question"],
+            template="""You are a senior business strategist specializing in long-term planning and market positioning.
+
+STRATEGIC INTELLIGENCE DATA:
+{context}
+
+STRATEGIC INQUIRY: {question}
+
+STRATEGIC ANALYSIS:
+🎯 **Strategic Position Assessment**: Current market position with specific market share percentages and competitive standing
+🏗️ **Strategic Framework**: Core business model analysis with revenue streams and cost structure insights
+🎪 **Market Opportunity Matrix**: Identified opportunities with market size, potential ROI percentages, and investment requirements
+⚔️ **Competitive Advantage Analysis**: Unique value propositions with quantified performance advantages (e.g., "40% faster", "25% more efficient")
+🚀 **Strategic Roadmap**: 3-phase implementation plan with timeline, resource allocation, and success metrics
+📊 **Investment & Resource Strategy**: Budget allocation recommendations with expected ROI percentages and payback periods
+🎯 **Strategic Partnerships**: Recommended alliances with potential value creation percentages
+⚠️ **Strategic Risk Matrix**: Risk assessment with probability percentages and impact levels
+📈 **Success Metrics & KPIs**: Specific measurable outcomes with target percentages and benchmarks
+
+STRATEGIC EMPHASIS: Focus on long-term value creation, sustainable competitive advantages, and scalable business models. Include specific ROI projections, market size opportunities, and strategic milestones with timelines.
+
+Provide strategic depth with quantified business impact and implementation feasibility scores."""
+        )
+        
+        # Executive summary template
+        self.executive_prompt = PromptTemplate(
+            input_variables=["context", "question"],
+            template="""You are a C-level executive consultant specializing in high-level business summaries and board-level insights.
+
+EXECUTIVE INTELLIGENCE DATA:
+{context}
+
+EXECUTIVE INQUIRY: {question}
+
+EXECUTIVE BRIEF:
+📋 **Executive Summary**: Critical insights in 3-4 sentences with key performance indicators and business impact
+💼 **Business Impact Assessment**: Direct revenue/cost implications with specific financial metrics and percentages
+🎯 **Key Performance Indicators**: Top 3-4 metrics that matter most with current performance vs. benchmarks
+⚡ **Critical Success Factors**: Essential elements for success with probability percentages and impact scores
+💰 **Financial Implications**: Revenue opportunities, cost savings, and investment requirements with ROI projections
+🚨 **Risk Assessment**: Top risks with probability percentages and mitigation strategies
+⏱️ **Implementation Priority**: High/Medium/Low priority actions with timeline and resource requirements
+📊 **Decision Matrix**: Clear recommendations with pros/cons and expected outcomes with success probabilities
+
+EXECUTIVE FOCUS: Concise, high-impact insights that support C-level decision making. Emphasize financial metrics, strategic priorities, and actionable decisions with clear ROI and risk profiles.
+
+Present information in executive-friendly format with bullet points, percentages, and clear action items."""
         )
 
     def _analyze_question_type(self, question: str) -> str:
@@ -292,6 +358,92 @@ While I specialize in business intelligence from ConvoTrack case studies, I can 
 Ready to provide actionable business intelligence! 🚀"""
         
         return response
+    
+    def ask_with_analysis_type(self, question: str, analysis_type: str = "default") -> Dict[str, Any]:
+        """Enhanced ask method that uses specific prompts based on analysis type"""
+        try:
+            # Clean and validate the question
+            clean_question = question.strip()
+            
+            if not clean_question:
+                return {
+                    "question": "Empty question",
+                    "answer": "🤖 Please provide a specific business question. I'm ready to analyze consumer insights, marketing strategies, and business trends from our case studies!",
+                    "sources": [],
+                    "agent_type": "validation_response",
+                    "confidence": "low"
+                }
+            
+            # Select prompt based on analysis type
+            prompt_map = {
+                "strategic": self.strategic_prompt,
+                "trends": self.trend_prompt,
+                "comparative": self.comparison_prompt,
+                "executive": self.executive_prompt,
+                "default": self.default_prompt
+            }
+            
+            selected_prompt = prompt_map.get(analysis_type, self.default_prompt)
+            
+            # Create specialized QA chain with selected prompt
+            specialized_qa_chain = RetrievalQA.from_chain_type(
+                llm=self.llm,
+                chain_type="stuff",
+                retriever=self.retriever,
+                chain_type_kwargs={
+                    "prompt": selected_prompt
+                },
+                return_source_documents=True
+            )
+            
+            # Get the enhanced response
+            result = specialized_qa_chain({"query": clean_question})
+            
+            # Enhanced response formatting with analysis type context
+            enhanced_answer = self._format_specialized_response(result["result"], analysis_type)
+            
+            return {
+                "question": clean_question,
+                "answer": enhanced_answer,
+                "sources": [doc.metadata.get('source', 'Unknown') for doc in result.get("source_documents", [])],
+                "agent_type": f"{analysis_type}_analysis",
+                "confidence": "high",
+                "analysis_type": analysis_type
+            }
+            
+        except Exception as e:
+            return {
+                "question": question,
+                "answer": f"⚠️ Analysis Error: {str(e)}. Please try rephrasing your question or check your API configuration.",
+                "sources": [],
+                "agent_type": "error_response",
+                "confidence": "low",
+                "error": str(e)
+            }
+    
+    def _format_specialized_response(self, answer: str, analysis_type: str) -> str:
+        """Format response with analysis type specific enhancements"""
+        type_headers = {
+            "strategic": "🎯 **STRATEGIC BUSINESS ANALYSIS**\n",
+            "trends": "📈 **TREND ANALYSIS & FUTURE OUTLOOK**\n", 
+            "comparative": "📊 **COMPARATIVE MARKET ANALYSIS**\n",
+            "executive": "📋 **EXECUTIVE BUSINESS BRIEF**\n",
+            "default": "💼 **BUSINESS INTELLIGENCE ANALYSIS**\n"
+        }
+        
+        header = type_headers.get(analysis_type, type_headers["default"])
+        
+        # Add analysis type specific footer
+        footers = {
+            "strategic": "\n\n---\n*Strategic analysis focused on long-term positioning and competitive advantage*",
+            "trends": "\n\n---\n*Trend analysis with forward-looking insights and market evolution*",
+            "comparative": "\n\n---\n*Comparative analysis with performance benchmarks and market positioning*",
+            "executive": "\n\n---\n*Executive summary designed for C-level decision making*",
+        }
+        
+        footer = footers.get(analysis_type, "")
+        
+        return header + answer + footer
 
     def ask(self, question: str) -> Dict[str, Any]:
         """Advanced question processing with intelligent routing and enhanced responses"""

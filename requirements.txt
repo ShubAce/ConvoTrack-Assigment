@@ -11,3 +11,4 @@ tiktoken
 langchain-pinecone
 pinecone-client
 langchain-huggingface
+plotly
