@@ -14,7 +14,7 @@ load_dotenv()
 
 # --- Page Configuration ---
 st.set_page_config(
-    page_title="ConvoTrack Synthesized BI Agent",
+    page_title="ConvoTrack Q&A Agent",
     page_icon="✨",
     layout="wide",
     initial_sidebar_state="expanded"
