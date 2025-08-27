@@ -1,0 +1,13 @@
+requests
+beautifulsoup4
+selenium
+langchain
+langchain-groq
+langchain-community
+langchain-text-splitters
+python-dotenv
+streamlit
+tiktoken
+langchain-pinecone
+pinecone-client
+langchain-huggingface
