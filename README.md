@@ -1,276 +1,344 @@
-# 🤖 ConvoTrack - Business Intelligence Assistant
+# ConvoTrack – Multi‑Agent Business Intelligence QA System
 
-<div align="center">
+Autonomous multi‑agent RAG (Retrieval Augmented Generation) system that ingests ConvoTrack case study pages, builds a Pinecone vector knowledge base, and serves a FastAPI backend powering a modern React (Vite) chat UI. Users ask open‑ended business / market / strategy questions; the system classifies intent, retrieves evidence, performs structured reasoning with Groq Llama3 70B, and returns a richly formatted, source‑grounded answer plus citations.
 
-![ConvoTrack Logo](https://img.shields.io/badge/ConvoTrack-Business%20Intelligence-blue?style=for-the-badge&logo=robot)
+## Contents
 
-**Advanced QA Agent for Business Intelligence Analysis**
+1. Features
+2. Architecture & Data Flow
+3. Repository Structure
+4. Technology Stack
+5. Environment Variables (.env template)
+6. Setup & Run (Backend + Frontend)
+7. Knowledge Base Build Workflow
+8. API Reference
+9. Frontend UX Highlights
+10. Multi‑Agent Design (Roles & Responsibilities)
+11. Customization Tips
+12. Troubleshooting & Diagnostics
+13. Roadmap / Next Ideas
+14. License
 
-[![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
-[![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://reactjs.org/)
-[![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org/)
-[![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+15. Features
 
-</div>
+---
 
-## � Overview
+-   End‑to‑end autonomous question answering over scraped case study corpus.
+-   Multi‑agent orchestration (Manager + Research + Analysis + Synthesizer agents).
+-   Automatic question intent routing into analysis modes: strategic, trends, comparative, executive, default.
+-   Retrieval via Pinecone (semantic vector search) with HuggingFace MiniLM embeddings.
+-   Structured, deeply reasoned analytical output with evidence synthesis & recommendations.
+-   Source citation panel with expandable raw text snippets (React sidebar / mobile overlay).
+-   FastAPI backend with clean JSON schema and CORS config for local dev ports (3000 / 5173).
+-   Selenium scraping script to refresh corpus from live case study URLs.
+-   Automatic knowledge base initialization on server startup (rebuild if index empty).
 
-ConvoTrack is an advanced business intelligence assistant that analyzes case studies to provide actionable insights for consumer behavior, marketing strategies, and business trends. Built with a modern tech stack featuring FastAPI backend and React frontend.
+2. Architecture & Data Flow
 
-## ✨ Features
+---
 
-### 🧠 Intelligent Analysis
-
--   **Multiple Analysis Types**: Strategic, Trend, Comparative, Executive, and General analysis
--   **Advanced NLP**: Powered by Groq LLM with intelligent question routing
--   **Context-Aware**: Understands business intent and provides relevant insights
-
-### 📊 Rich Data Processing
-
--   **Vector Search**: Pinecone-powered semantic search across case studies
--   **Smart Retrieval**: Enhanced context retrieval with query expansion
--   **Source Attribution**: Detailed source tracking with relevance scoring
-
-### � Modern UI/UX
-
--   **Responsive Design**: Beautiful, mobile-first interface with Tailwind CSS
--   **Real-time Chat**: Interactive conversation interface with typing indicators
--   **Data Visualization**: Confidence scores, source counts, and analytics
--   **Dark Theme**: Modern glassmorphism design with smooth animations
-
-### 🔍 Business Intelligence
-
--   **Consumer Insights**: Deep analysis of consumer behavior patterns
--   **Marketing Analytics**: Campaign effectiveness and strategy optimization
--   **Trend Analysis**: Market trends and future outlook predictions
--   **Competitive Analysis**: Comparative market positioning insights
-
-## 🚀 Quick Start
-
-### Prerequisites
-
--   🐍 Python 3.8+
--   📦 Node.js 16+ and npm
--   🔑 API Keys (Groq, HuggingFace, Pinecone)
-
-### 🎯 One-Click Setup
-
-1. **Clone the repository**
-
-    ```bash
-    git clone https://github.com/ShubAce/ConvoTrack-Assignment.git
-    cd ConvoTrack
-    ```
-
-2. **Set up API keys**
-   Create `qa_agent/.env` file:
-
-    ```env
-    GROQ_API_KEY=your_groq_api_key_here
-    HUGGINGFACE_API_TOKEN=your_huggingface_token_here
-    PINECONE_API_KEY=your_pinecone_api_key_here
-    ```
-
-3. **Launch the application**
-
-    ```bash
-    # Windows
-    start_convotrack.bat
-
-    # Or manually start both servers:
-    # Backend: cd qa_agent && python fastapi_server.py
-    # Frontend: cd frontend && npm run dev
-    ```
-
-4. **Access the application**
-    - 🌐 Frontend: http://localhost:5173
-    - 📖 API Docs: http://localhost:8000/docs
-    - 🔍 Health Check: http://localhost:8000/health
-
-## 🏗️ Architecture
+High‑level pipeline:
 
 ```
-ConvoTrack/
-├── 🔧 qa_agent/                    # FastAPI Backend
-│   ├── fastapi_server.py          # Main API server
-│   ├── qa_agent.py                # Advanced QA logic
-│   ├── document_loader.py         # Document processing
-│   ├── requirements.txt           # Python dependencies
-│   └── .env                       # API keys (create this)
-├── 🎨 frontend/                   # React Frontend
-│   ├── src/
-│   │   ├── App.jsx                # Main React component
-│   │   ├── App.css                # Custom styles
-│   │   └── index.css              # Global styles
-│   ├── package.json               # Node dependencies
-│   └── vite.config.js             # Vite configuration
-├── 📄 extractContent/             # Data Processing
-│   ├── selenium_scraper.py        # Web scraping
-│   └── scraped_articles_selenium/ # Case study articles
-└── 🚀 start_convotrack.bat       # Launch script
+         (1) Selenium Scraper
+                │
+                ▼
+          Raw Case Study .txt files
+                │
+        DocumentLoader + Splitter
+                │ (chunks)
+                ▼
+   HuggingFace Endpoint Embeddings
+                │ (vectors)
+                ▼
+           Pinecone Index
+                │ (top-k relevant docs)
+                ▼
+           ResearchAgent
+                │ context docs
+                ▼
+           AnalysisAgent (LLM: Groq Llama3 70B)
+                │ raw structured analysis
+                ▼
+          SynthesizerAgent (formatting)
+                │ answer + metadata
+                ▼
+        FastAPI /ask endpoint (JSON)
+                │
+                ▼
+           React Frontend (chat + citations)
 ```
 
-## 🔧 API Endpoints
+3. Repository Structure
 
-### Core Endpoints
-
--   `POST /ask` - Process business questions with analysis
--   `GET /topics` - Get available case study topics
--   `GET /analysis-types` - Get supported analysis types
--   `GET /insights` - Get conversation analytics
--   `POST /search` - Search similar content
-
-### Analysis Types
-
-1. **📊 General Business Analysis** - Comprehensive insights and recommendations
-2. **🎯 Strategic Analysis** - Long-term strategic planning insights
-3. **📈 Trend Analysis** - Market trends and future outlook
-4. **📊 Comparative Analysis** - Side-by-side performance comparisons
-5. **📋 Executive Summary** - C-level decision making insights
-
-## 🎯 Usage Examples
-
-### Business Strategy Questions
+---
 
 ```
-"What are the most effective marketing strategies for beauty brands?"
-"How do consumer preferences compare between different age groups?"
-"What trends are emerging in the food industry?"
+extractContent/
+  selenium_scraper.py            # Scrape case study pages into article_*.txt
+  scraped_articles_selenium/     # Persisted text corpus (inputs to RAG)
+qa_agent/
+  fastapi_server.py              # FastAPI app (startup loads agent)
+  qa_agent_ai.py                 # Multi‑agent system (manager + workers)
+  document_loader.py             # Corpus loading, splitting, Pinecone index mgmt
+frontend/                        # React + Vite chat UI (source citations panel)
+requirements.txt                 # Python backend dependencies
 ```
 
-### Performance Analysis
+4. Technology Stack
+
+---
+
+Backend:
+
+-   Python 3.12+
+-   FastAPI + Uvicorn
+-   LangChain (orchestration, chains, prompts)
+-   Groq Llama3‑70B (ChatGroq) – reasoning & routing
+-   Pinecone (vector DB) – semantic retrieval
+-   HuggingFace Endpoint Embeddings (MiniLM-L6-v2, 384-dim)
+-   Selenium (Chrome) – initial corpus acquisition
+
+Frontend:
+
+-   React 19 + Vite
+-   Tailwind CSS 4 (via @tailwindcss/vite)
+-   Framer Motion (animations)
+-   react-markdown (LLM answer rendering)
+-   lucide-react (icons)
+-   Axios (API calls)
+
+5. Environment Variables (.env template)
+
+---
+
+Create `qa_agent/.env` (already loaded via `dotenv`):
 
 ```
-"Compare social media engagement rates across platforms"
-"What metrics indicate successful brand campaigns?"
-"Analyze ROI differences between digital marketing channels"
+GROQ_API_KEY=your_groq_key_here
+PINECONE_API_KEY=your_pinecone_key_here
+HUGGINGFACE_API_TOKEN=your_hf_token_here
 ```
 
-### Market Intelligence
+Notes:
+
+-   Pinecone index name defaults to `convotrack-casestudies` (see `VectorStoreManager`). Region/serverless spec is hard‑coded (AWS us-east-1).
+-   HuggingFace token must permit inference for `sentence-transformers/all-MiniLM-L6-v2` via endpoint.
+-   No OpenAI key needed (Groq is used).
+
+6. Setup & Run
+
+---
+
+### 6.1 Backend (Windows CMD examples)
 
 ```
-"What consumer behavior patterns drive brand loyalty?"
-"How do seasonal trends affect purchase decisions?"
-"Identify growth opportunities in emerging markets"
-```
-
-## 🛠️ Development
-
-### Backend Development
-
-```bash
 cd qa_agent
-python -m venv venv
-venv\Scripts\activate  # Windows
-source venv/bin/activate  # Linux/Mac
-pip install -r requirements.txt
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r ..\requirements.txt
+copy NUL .env  (then edit .env with keys)  # or create manually
 python fastapi_server.py
 ```
 
-### Frontend Development
+Server starts at http://localhost:8000 with hot reload.
 
-```bash
+Health check: http://localhost:8000/health
+
+### 6.2 Frontend
+
+```
 cd frontend
 npm install
 npm run dev
 ```
 
-### Environment Variables
+Open the printed local URL (default http://localhost:5173). The app auto‑checks backend health.
 
-Required in `qa_agent/.env`:
-
-```env
-# LLM API
-GROQ_API_KEY=gsk_your_groq_api_key
-
-# Embeddings API
-HUGGINGFACE_API_TOKEN=hf_your_huggingface_token
-
-# Vector Database
-PINECONE_API_KEY=pcsk_your_pinecone_api_key
-```
-
-## 🎨 UI Features
-
-### Modern Design Elements
-
--   **Glassmorphism Effects** - Translucent backgrounds with blur effects
--   **Gradient Animations** - Smooth color transitions and hover effects
--   **Responsive Layout** - Mobile-first design with breakpoint optimization
--   **Interactive Components** - Animated buttons, loading states, and transitions
-
-### User Experience
-
--   **Real-time Status** - API connection status with visual indicators
--   **Smart Suggestions** - Topic-based question suggestions
--   **Progressive Disclosure** - Collapsible sections for better information hierarchy
--   **Accessibility** - WCAG compliant with keyboard navigation support
-
-## 📊 Analytics & Insights
-
-### Conversation Analytics
-
--   Question categorization and intent analysis
--   Response confidence scoring
--   Source relevance tracking
--   Usage pattern analysis
-
-### Business Intelligence Metrics
-
--   Engagement rate analysis
--   Conversion rate tracking
--   Market share comparisons
--   ROI calculations with projections
-
-## 🚨 Troubleshooting
-
-### Common Issues
-
-**Backend not starting:**
-
--   Check if all API keys are properly set in `.env`
--   Verify Python version (3.8+)
--   Install dependencies: `pip install -r requirements.txt`
-
-**Frontend build errors:**
-
--   Check Node.js version (16+)
--   Clear node_modules: `rm -rf node_modules && npm install`
--   Update dependencies: `npm update`
-
-**Vector store issues:**
-
--   Verify Pinecone API key and permissions
--   Check if case study files exist in the correct directory
--   Force rebuild: Set `force_rebuild=True` in `setup_knowledge_base()`
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Commit changes: `git commit -m 'Add amazing feature'`
-4. Push to branch: `git push origin feature/amazing-feature`
-5. Open a Pull Request
-
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## � Acknowledgments
-
--   **Groq** - High-performance LLM inference
--   **Pinecone** - Vector database for semantic search
--   **HuggingFace** - Pre-trained embedding models
--   **FastAPI** - Modern Python web framework
--   **React** - Frontend framework
--   **Tailwind CSS** - Utility-first CSS framework
+7. Knowledge Base Build Workflow
 
 ---
 
-<div align="center">
+First server startup:
 
-**Built with ❤️ for Business Intelligence**
+1. `fastapi_server` runs `AdvancedCaseStudyQAAgent` startup event.
+2. `setup_knowledge_base()` (Pinecone) checks if the index has vectors.
+3. If empty: loads `extractContent/scraped_articles_selenium/*.txt`, splits into 1000‑char chunks (200 overlap), embeds, and upserts into Pinecone.
+4. Subsequent restarts reuse existing vectors (fast).
 
-[Report Bug](https://github.com/ShubAce/ConvoTrack-Assignment/issues) · [Request Feature](https://github.com/ShubAce/ConvoTrack-Assignment/issues) · [Documentation](https://github.com/ShubAce/ConvoTrack-Assignment/wiki)
+Force rebuild options:
 
-</div>
+-   Run `python qa_agent/document_loader.py` (its `__main__` uses `force_rebuild=True`).
+-   Or modify the startup call to pass `force_rebuild=True` (manual code change).
+
+Scraping new corpus:
+
+```
+cd extractContent
+python selenium_scraper.py
+```
+
+Ensure Chrome + matching chromedriver are installed/on PATH. New article files will appear; then rebuild the vector store.
+
+8. API Reference
+
+---
+
+Base URL: `http://localhost:8000`
+
+### 8.1 GET /health
+
+Response 200:
+
+```
+{
+  "status": "healthy",
+  "message": "ConvoTrack QA Agent API is running and agent is initialized.",
+  "agent_initialized": true
+}
+```
+
+Errors: 503 if agent failed to initialize.
+
+### 8.2 POST /ask
+
+Request body:
+
+```
+{ "question": "What emerging trends connect influencer engagement to consumer purchase behavior?" }
+```
+
+(Note: client does NOT send analysis_type; router chooses it.)
+
+Successful response:
+
+```
+{
+  "question": "...",
+  "answer": "🎯 **Detailed Strategic Business Analysis**\n ... formatted markdown ...",
+  "sources": [
+     {
+       "content": "Chunk text ...",
+       "url": "https://convotrack.ai/case-studies/...",
+       "article_number": "12"
+     },
+     ...
+  ],
+  "agent_type": "strategic_analysis",
+  "confidence": "high",
+  "analysis_type": "strategic"
+}
+```
+
+Error responses:
+
+-   400: empty question
+-   503: agent not initialized
+-   500: internal processing error (trace logged server-side)
+
+Rate / Performance Considerations:
+
+-   Each `/ask` triggers: routing LLM call + retrieval + analysis LLM call + formatting.
+-   Increase/decrease retrieved chunks via `search_kwargs={"k": 15}` in `qa_agent_ai.py`.
+
+9. Frontend UX Highlights
+
+---
+
+-   Real‑time connection badge (Online / Offline / Connecting).
+-   Animated message ingress with Framer Motion.
+-   Analysis type chip (auto‑selected by router) visible atop each bot response.
+-   Citation History sidebar: groups sources per user query, expandable to view raw chunk content & link back to original URL.
+-   Mobile responsive drawer for citations.
+-   Markdown rendering of structured answer (headings, lists, emphasis preserved).
+
+10. Multi‑Agent Design
+
+---
+
+Roles (inside `qa_agent_ai.py`):
+
+-   Manager (AdvancedCaseStudyQAAgent)
+    -   Intent routing (LLM classifier) → analysis type
+    -   Orchestrates research → analysis → synthesis
+    -   Compiles final JSON payload
+-   ResearchAgent
+    -   Similarity retrieval over Pinecone vector store (k=15)
+-   AnalysisAgent
+    -   Selects prompt template (all specialized types reuse enhanced analytical prompt)
+    -   Runs detailed chain with Groq Llama3 70B
+-   SynthesizerAgent
+    -   Adds human‑friendly headers, footers, contextual disclaimers per analysis type
+
+11. Customization Tips
+
+---
+
+| Goal                      | Where to Change                                                                                    |
+| ------------------------- | -------------------------------------------------------------------------------------------------- |
+| Adjust retrieval depth    | `search_kwargs` in `AdvancedCaseStudyQAAgent.__init__`                                             |
+| Add new analysis category | Add to router prompt + templates dict, update frontend analysisTypes list if you want chip styling |
+| Change embedding model    | `repo_id` in `VectorStoreManager` (ensure dimension matches index)                                 |
+| Force index rebuild       | Run `document_loader.py` main or add `force_rebuild=True` during startup                           |
+| Temperature / creativity  | `temperature` param in `ChatGroq` init                                                             |
+| Chunk size / overlap      | `RecursiveCharacterTextSplitter` in `DocumentLoader`                                               |
+| Add auth to API           | Wrap FastAPI endpoints with dependency or API key logic                                            |
+
+12. Troubleshooting & Diagnostics
+
+---
+
+Issue -> Remedy:
+
+-   GROQ_API_KEY not found: Ensure `.env` is in `qa_agent/` directory (same working dir when launching) and variable spelled correctly.
+-   Pinecone authentication error: Confirm key + region specification (serverless us-east-1). If index dimension mismatch, delete index in dashboard and rebuild.
+-   HuggingFace 403: Token lacks access / rate-limited – verify scope or switch to local embedding model (would require code changes to use `HuggingFaceEmbeddings` offline).
+-   Empty answers: Check that `.txt` corpus actually has meaningful content beyond headers; verify retrieval by running `python qa_agent/document_loader.py` and test similarity search printout section.
+-   Selenium fails to start: Install Chrome & matching chromedriver; or switch to undetected-chromedriver / headless mode adjustments.
+-   CORS errors in browser: Ensure frontend requests exactly `http://localhost:8000` and that origin (`http://localhost:5173` or `3000`) is included in `allow_origins` list.
+-   High latency: Reduce k from 15 to e.g. 8; possibly downgrade model; enable streaming (not yet implemented) as an enhancement.
+
+Logging: Server prints lifecycle steps (init, routing classification, analysis type chosen). Add more granular logs inside each agent as needed.
+
+13. Roadmap / Next Ideas
+
+---
+
+-   Streaming token output to frontend (Server-Sent Events or WebSocket) with incremental markdown rendering.
+-   Add evaluation tests: retrieval recall, hallucination checks.
+-   Caching layer (question → answer) for repeated queries.
+-   Query expansion / hybrid (sparse + dense) retrieval.
+-   Add authentication & basic usage metering.
+-   Observability: structured logging + trace IDs.
+-   Prompt specialization per analysis type (currently reuses single enhanced template).
+-   Add unit tests (pytest) for document loading and response schema integrity.
+
+14. License
+
+---
+
+Add your preferred license here (e.g., MIT). Include attribution notices for third‑party models/services (Groq, Pinecone, HuggingFace, etc.).
+
+---
+
+## Quick Start (TL;DR)
+
+```
+# Backend
+cd qa_agent
+python -m venv .venv && .venv\Scripts\activate
+pip install -r ..\requirements.txt
+echo GROQ_API_KEY=...> .env & echo PINECONE_API_KEY=...>> .env & echo HUGGINGFACE_API_TOKEN=...>> .env
+python fastapi_server.py
+
+# Frontend (new terminal)
+cd frontend
+npm install
+npm run dev
+```
+
+Visit http://localhost:5173, ask a question, expand citations.
+
+---
+
+Contributions & feedback welcome. Enjoy exploring autonomous BI with ConvoTrack!
