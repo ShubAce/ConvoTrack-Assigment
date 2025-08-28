@@ -491,7 +491,7 @@ def perform_synthesized_analysis(question, qa_agent, analysis_type):
 
 # --- Main Application Logic ---
 def main():
-    st.markdown('<h1 class="main-header">✨ ConvoTrack Synthesized BI Agent</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">✨ ConvoTrack Q&A Agent</h1>', unsafe_allow_html=True)
     
     # Sidebar
     with st.sidebar:
