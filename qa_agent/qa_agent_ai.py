@@ -1,716 +1,295 @@
 import os
 import re
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any
 from dotenv import load_dotenv
 from langchain.schema import Document
-from langchain.chains import RetrievalQA
+from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 from langchain_groq import ChatGroq
 from langchain_pinecone import PineconeVectorStore
 from document_loader import setup_knowledge_base
 
-# Load environment variables
+# Load environment variables from a .env file
 load_dotenv()
+
+# --- WORKER AGENT DEFINITIONS ---
+
+class ResearchAgent:
+    """
+    Specialized agent for retrieving relevant information from the knowledge base.
+    Its only job is to find the best possible context for a given question.
+    """
+    def __init__(self, retriever: PineconeVectorStore.as_retriever):
+        self.retriever = retriever
+
+    def gather_context(self, question: str) -> List[Document]:
+        """
+        Performs a similarity search on the vector store to find relevant documents.
+        This could be expanded with more advanced techniques like query expansion.
+        """
+        print("Research Agent: Gathering context from knowledge base...")
+        return self.retriever.get_relevant_documents(question)
+
+class AnalysisAgent:
+    """
+    Specialized agent for performing deep analysis on a given topic using
+    the context provided by the Research Agent.
+    """
+    def __init__(self, llm: ChatGroq, prompt_templates: Dict[str, PromptTemplate]):
+        self.llm = llm
+        self.prompt_templates = prompt_templates
+
+    def generate_analysis(self, question: str, context: List[Document], analysis_type: str) -> str:
+        """
+        Generates a detailed, raw analysis by feeding the question and context
+        into a specialized prompt template.
+        """
+        print(f"Analysis Agent: Generating '{analysis_type}' analysis...")
+        prompt = self.prompt_templates.get(analysis_type, self.prompt_templates["default"])
+        
+        # This chain simply combines the context and question into the prompt
+        analysis_chain = LLMChain(llm=self.llm, prompt=prompt)
+        
+        # Format the retrieved documents into a single string for the prompt
+        context_str = "\n\n---\n\n".join([doc.page_content for doc in context])
+        
+        # Run the analysis
+        result = analysis_chain.run(context=context_str, question=question)
+        return result
+
+class SynthesizerAgent:
+    """
+    Specialized agent for formatting and polishing the raw analysis into a
+    final, user-friendly response.
+    """
+    def craft_final_response(self, raw_analysis: str, analysis_type: str) -> str:
+        """
+        Takes the raw text from the Analysis Agent and adds headers, footers,
+        and other formatting to make it clear and presentable.
+        """
+        print("Synthesizer Agent: Formatting final response...")
+        
+        type_headers = {
+            "strategic": "🎯 **Detailed Strategic Business Analysis**\n",
+            "trends": "📈 **In-Depth Trend Analysis & Future Outlook**\n", 
+            "comparative": "📊 **Comprehensive Comparative Market Analysis**\n",
+            "executive": "📋 **Actionable Executive Business Brief**\n",
+            "default": "💼 **Detailed Business Intelligence Analysis**\n"
+        }
+        header = type_headers.get(analysis_type, type_headers["default"])
+        
+        footers = {
+            "strategic": "\n\n---\n*This multi-agent strategic analysis focuses on long-term positioning, competitive advantage, and sustainable growth models based on the provided context.*",
+            "trends": "\n\n---\n*This multi-agent trend analysis provides forward-looking insights into market evolution, backed by data points from the source material.*",
+            "comparative": "\n\n---\n*This multi-agent comparative analysis uses performance benchmarks and qualitative data for a comprehensive market positioning assessment.*",
+            "executive": "\n\n---\n*This multi-agent executive summary is designed for high-level, C-suite decision making, focusing on actionable insights and strategic imperatives.*",
+        }
+        footer = footers.get(analysis_type, "")
+        
+        return header + raw_analysis + footer
+
+# --- MANAGER AGENT ---
 
 class AdvancedCaseStudyQAAgent:
     """
-    Advanced ConvoTrack Business Intelligence Agent
-    Features: Creative analysis, practical insights, effective natural language understanding
+    The main Manager Agent that orchestrates the workflow between the specialized
+    worker agents to produce a detailed and logical response.
     """
     
     def __init__(self, scraped_articles_path: str, groq_api_key: str = None):
-        self.scraped_articles_path = scraped_articles_path
-        self.agent_name = "ConvoTrack Business Intelligence Specialist"
+        """
+        Initializes the entire multi-agent system, including the LLM,
+        vector store, and all worker agents.
+        """
+        self.agent_name = "ConvoTrack Multi-Agent BI System"
         
-        # Set up Groq LLM with advanced parameters
+        # Initialize the Groq Language Model
         api_key = groq_api_key or os.getenv("GROQ_API_KEY")
         if not api_key:
-            raise ValueError("GROQ_API_KEY not found. Please set it in .env file or pass as parameter")
+            raise ValueError("GROQ_API_KEY not found.")
         
         self.llm = ChatGroq(
             groq_api_key=api_key,
-            temperature=0.3,  # Balanced for creativity and accuracy
-            model_name="llama-3.3-70b-versatile",
+            temperature=0.2, # Lower temperature for more logical and fact-based outputs
+            model_name="llama3-70b-8192",
         )
         
-        # Set up knowledge base
+        # Set up the knowledge base and retriever
         self.vectorstore = setup_knowledge_base(scraped_articles_path)
-        
-        # Create advanced retriever with multiple search strategies
         self.retriever = self.vectorstore.as_retriever(
             search_type="similarity",
-            search_kwargs={"k": 10}  # Retrieve more documents for comprehensive analysis
+            search_kwargs={"k": 15}  # Increase K to gather more context for detailed analysis
         )
         
-        # Enhanced business intelligence keywords
-        self.business_keywords = {
-            'strategy': ['strategy', 'strategic', 'plan', 'planning', 'approach', 'method'],
-            'marketing': ['marketing', 'campaign', 'promotion', 'advertising', 'branding', 'content'],
-            'consumer': ['consumer', 'customer', 'user', 'audience', 'demographic', 'behavior'],
-            'performance': ['performance', 'metrics', 'kpi', 'roi', 'conversion', 'engagement', 'results'],
-            'trends': ['trend', 'trending', 'popular', 'emerging', 'growth', 'increase', 'rise'],
-            'analysis': ['analysis', 'insight', 'finding', 'data', 'research', 'study', 'report'],
-            'innovation': ['innovation', 'new', 'creative', 'unique', 'novel', 'breakthrough'],
-            'competitive': ['competitive', 'competition', 'competitor', 'market share', 'advantage']
+        # Create and store all necessary prompt templates
+        self.prompt_templates = self._create_prompt_templates()
+        
+        # Initialize worker agents and provide them with the necessary tools
+        self.research_agent = ResearchAgent(self.retriever)
+        self.analysis_agent = AnalysisAgent(self.llm, self.prompt_templates)
+        self.synthesizer_agent = SynthesizerAgent()
+
+    def _create_prompt_templates(self) -> Dict[str, PromptTemplate]:
+        """
+        Creates and returns a dictionary of all specialized prompt templates.
+        These are enhanced for more detailed and logical reasoning.
+        """
+        # Router prompt to classify the user's question
+        router_template = PromptTemplate(
+            input_variables=["question"],
+            template="""You are an expert request router. Your job is to analyze a user's business question and classify it into one of the following categories based on its intent.
+
+Here are the available categories:
+- **strategic**: For questions about long-term planning, competitive advantage, market positioning, or business models.
+- **trends**: For questions about market evolution, future predictions, emerging patterns, or changes over time.
+- **comparative**: For questions that compare two or more items, strategies, or performance metrics.
+- **executive**: For questions seeking high-level, concise summaries, financial implications, or C-level decision support.
+- **default**: For general business intelligence questions, performance analysis, or when no other category fits perfectly.
+
+Based on the question below, provide ONLY the single category ID that best fits. Do not add any explanation or punctuation.
+
+Question: "{question}"
+Category ID:"""
+        )
+
+        # Enhanced Default/Analysis Prompt for deep, logical reasoning
+        detailed_analysis_prompt = PromptTemplate(
+            input_variables=["context", "question"],
+            template="""You are a world-class business analyst and strategist. Your task is to provide a deeply logical and highly detailed analysis based on the provided case study intelligence. Your response must be structured, evidence-based, and demonstrate a clear chain of reasoning.
+
+**MISSION**: Synthesize the provided context to comprehensively answer the business inquiry. You must connect multiple pieces of information from the context to form a coherent, evidence-based argument. Do not simply state facts; you must explain their strategic implications in detail.
+
+**CASE STUDY INTELLIGENCE (CONTEXT):**
+{context}
+
+**BUSINESS INQUIRY:**
+{question}
+
+---
+
+**DETAILED LOGICAL ANALYSIS (Your Response):**
+
+**1. Executive Summary:**
+   - Begin with a concise, 2-3 sentence summary of the most critical findings and conclusions. This should be direct and impactful.
+
+**2. Deconstruction of the Inquiry:**
+   - Break down the user's question into its core analytical components. State these components clearly (e.g., "This question requires us to first analyze X, then evaluate its impact on Y...").
+
+**3. Evidence Synthesis & Chain of Reasoning:**
+   - For each component identified above, construct a detailed argument.
+   - **Gather Evidence**: Pull specific, relevant data points, quotes, or findings from the provided context. Mention multiple pieces of evidence for each point.
+   - **Explain Connections (Chain of Logic)**: This is the most critical part. Do not just list the evidence. Explicitly explain *how* the pieces of evidence connect to each other and lead to your conclusions. Use phrases like:
+     - "The fact that [Evidence A] occurred, combined with the metric [Evidence B], strongly suggests that..."
+     - "This leads to the logical conclusion that..."
+     - "Therefore, we can infer a direct causal link between..."
+     - "The implication of this connection is significant because..."
+   - **Quantify Where Possible**: Use any numbers, percentages, or metrics from the context to support your reasoning.
+
+**4. Strategic Implications & Second-Order Effects:**
+   - Go beyond the immediate answer. Based on your logical conclusions, what are the broader strategic implications for a business?
+   - What are the "second-order effects"? (i.e., if the company does X, what is the likely market reaction or subsequent challenge?)
+   - Explain *why* this analysis matters from a business strategy perspective.
+
+**5. Actionable, Evidence-Based Recommendations:**
+   - Based *only* on the logical analysis above, provide a set of 3-5 specific, actionable recommendations.
+   - For each recommendation, briefly state which part of your evidence-based reasoning supports it.
+
+**6. Acknowledgment of Limitations & Counterarguments:**
+   - Briefly mention any potential limitations of the analysis based on the provided context. Are there any gaps in the data?
+   - Consider one potential counterargument or alternative interpretation and briefly address it. This demonstrates sophisticated, critical thinking.
+"""
+        )
+
+        return {
+            "router": router_template,
+            "default": detailed_analysis_prompt,
+            "strategic": detailed_analysis_prompt,
+            "trends": detailed_analysis_prompt,
+            "comparative": detailed_analysis_prompt,
+            "executive": detailed_analysis_prompt,
         }
-        
-        # Question types for intelligent routing
-        self.question_types = {
-            'comparison': ['vs', 'versus', 'compare', 'difference', 'better', 'best', 'worst'],
-            'trend': ['trend', 'change', 'evolving', 'future', 'prediction', 'forecast'],
-            'how_to': ['how to', 'how can', 'ways to', 'methods', 'approach', 'strategy for'],
-            'metrics': ['metrics', 'measure', 'kpi', 'performance', 'roi', 'success rate'],
-            'recommendation': ['recommend', 'suggest', 'advice', 'should', 'best practice']
-        }
-        
-        # Create dynamic prompt templates for different question types
-        self.create_prompt_templates()
-        
-        # Initialize conversation context
-        self.conversation_history = []
-        
-        # Create the QA chain
-        self.qa_chain = RetrievalQA.from_chain_type(
-            llm=self.llm,
-            chain_type="stuff",
-            retriever=self.retriever,
-            chain_type_kwargs={
-                "prompt": self.default_prompt
-            },
-            return_source_documents=True
-        )
-    
-    def create_prompt_templates(self):
-        """Create specialized prompt templates for different types of questions"""
-        
-        # Default comprehensive analysis template
-        self.default_prompt = PromptTemplate(
-            input_variables=["context", "question"],
-            template="""You are an elite ConvoTrack Business Intelligence Specialist with expertise in consumer psychology, market analysis, and strategic business insights.
 
-MISSION: Transform raw case study data into actionable business intelligence that drives real-world results.
+    def _get_analysis_type(self, question: str) -> str:
+        """
+        Uses the LLM-based router to determine the best analysis type for a question.
+        This is the Manager's first decision.
+        """
+        print("Manager Agent: Routing user question to determine intent...")
+        router_chain = LLMChain(llm=self.llm, prompt=self.prompt_templates["router"])
+        response = router_chain.run(question)
+        analysis_type = response.strip().lower().replace(".", "")
+        if analysis_type not in self.prompt_templates:
+            print(f"Warning: Router returned unexpected type '{analysis_type}'. Falling back to default.")
+            return "default"
+        print(f"Manager Agent: Intent classified as '{analysis_type}'.")
+        return analysis_type
 
-CASE STUDY INTELLIGENCE:
-{context}
-
-BUSINESS INQUIRY: {question}
-
-COMPREHENSIVE ANALYSIS:
-Provide a strategic business analysis that includes:
-
-🎯 **Executive Summary**: Key takeaway in 2-3 sentences
-
-📊 **Data-Driven Insights**: Specific findings from the case studies with numbers/percentages when available. Always include:
-- Engagement rates, conversion rates, or performance percentages when mentioned
-- Growth rates or changes over time with specific numbers
-- Comparative data between brands, platforms, or strategies
-- Market share data or competitive positioning metrics
-
-🚀 **Strategic Implications**: What this means for business strategy and market positioning
-
-💡 **Actionable Recommendations**: 3-4 specific, implementable actions
-
-🔮 **Future Outlook**: Trends and predictions based on the data with projected percentages when possible
-
-⚠️ **Risk Considerations**: Potential challenges or limitations to consider
-
-IMPORTANT: When presenting data, always include specific numbers, percentages, and quantitative metrics from the case studies. Format numerical data clearly (e.g., "Brand A achieved 85% engagement vs Brand B's 72%") to enable data visualization.
-
-Write in a professional yet engaging tone. Use business terminology appropriately but ensure accessibility. Back up every claim with evidence from the case studies."""
-        )
-        
-        # Comparison analysis template
-        self.comparison_prompt = PromptTemplate(
-            input_variables=["context", "question"],
-            template="""You are a comparative business analyst specializing in market intelligence and competitive analysis.
-
-COMPARATIVE INTELLIGENCE DATA:
-{context}
-
-COMPARISON REQUEST: {question}
-
-COMPARATIVE ANALYSIS:
-🔍 **Comparison Framework**: Establish clear criteria for comparison with baseline metrics
-📊 **Side-by-Side Analysis**: Detailed comparison with specific metrics, percentages, and performance indicators (e.g., "Platform A: 85% engagement vs Platform B: 72% engagement")
-🏆 **Winner/Leader Analysis**: Which approach/strategy/brand performs better with quantified performance gaps
-📈 **Performance Gaps**: Quantify differences with exact percentages and ratios (e.g., "Strategy X outperformed by 23% margin")
-🎯 **Strategic Recommendations**: Which approach to adopt with expected performance improvements
-⚖️ **Trade-offs**: Pros and cons with risk/benefit percentages when available
-
-QUANTITATIVE EMPHASIS: Always provide numerical comparisons, percentage differences, performance ratios, and statistical metrics from the case studies. Format comparisons clearly for data visualization (e.g., "Brand A: 67%, Brand B: 54%, Industry Average: 45%").
-
-Provide specific data points, percentages, and concrete examples from the case studies."""
-        )
-        
-        # Trend analysis template
-        self.trend_prompt = PromptTemplate(
-            input_variables=["context", "question"],
-            template="""You are a trend forecasting expert specializing in consumer behavior and market evolution.
-
-TREND INTELLIGENCE DATA:
-{context}
-
-TREND INQUIRY: {question}
-
-TREND ANALYSIS:
-📈 **Current State**: What the data shows about the present situation with specific metrics and percentages
-🔄 **Evolution Pattern**: How things have changed over time with year-over-year growth rates and comparative data
-🚀 **Emerging Trends**: New developments and patterns identified with adoption rates and market penetration data
-📊 **Trend Drivers**: What's causing these changes (consumer behavior, technology, etc.) with supporting percentages
-🎯 **Business Impact**: How these trends affect business strategy with projected impact percentages
-🔮 **Future Projections**: Where trends are heading (next 1-2 years) with specific growth projections and timeframes
-💰 **Revenue Opportunities**: How businesses can capitalize on these trends with market size and opportunity percentages
-
-QUANTITATIVE FOCUS: Always include specific data points, growth rates, adoption percentages, market share figures, and comparative metrics from the case studies. Format data clearly (e.g., "Instagram engagement grew by 35% while TikTok increased by 67% year-over-year").
-
-Include specific examples and data points from case studies to support trend analysis."""
-        )
-        
-        # Strategic analysis template
-        self.strategic_prompt = PromptTemplate(
-            input_variables=["context", "question"],
-            template="""You are a senior business strategist specializing in long-term planning and market positioning.
-
-STRATEGIC INTELLIGENCE DATA:
-{context}
-
-STRATEGIC INQUIRY: {question}
-
-STRATEGIC ANALYSIS:
-🎯 **Strategic Position Assessment**: Current market position with specific market share percentages and competitive standing
-🏗️ **Strategic Framework**: Core business model analysis with revenue streams and cost structure insights
-🎪 **Market Opportunity Matrix**: Identified opportunities with market size, potential ROI percentages, and investment requirements
-⚔️ **Competitive Advantage Analysis**: Unique value propositions with quantified performance advantages (e.g., "40% faster", "25% more efficient")
-🚀 **Strategic Roadmap**: 3-phase implementation plan with timeline, resource allocation, and success metrics
-📊 **Investment & Resource Strategy**: Budget allocation recommendations with expected ROI percentages and payback periods
-🎯 **Strategic Partnerships**: Recommended alliances with potential value creation percentages
-⚠️ **Strategic Risk Matrix**: Risk assessment with probability percentages and impact levels
-📈 **Success Metrics & KPIs**: Specific measurable outcomes with target percentages and benchmarks
-
-STRATEGIC EMPHASIS: Focus on long-term value creation, sustainable competitive advantages, and scalable business models. Include specific ROI projections, market size opportunities, and strategic milestones with timelines.
-
-Provide strategic depth with quantified business impact and implementation feasibility scores."""
-        )
-        
-        # Executive summary template
-        self.executive_prompt = PromptTemplate(
-            input_variables=["context", "question"],
-            template="""You are a C-level executive consultant specializing in high-level business summaries and board-level insights.
-
-EXECUTIVE INTELLIGENCE DATA:
-{context}
-
-EXECUTIVE INQUIRY: {question}
-
-EXECUTIVE BRIEF:
-📋 **Executive Summary**: Critical insights in 3-4 sentences with key performance indicators and business impact
-💼 **Business Impact Assessment**: Direct revenue/cost implications with specific financial metrics and percentages
-🎯 **Key Performance Indicators**: Top 3-4 metrics that matter most with current performance vs. benchmarks
-⚡ **Critical Success Factors**: Essential elements for success with probability percentages and impact scores
-💰 **Financial Implications**: Revenue opportunities, cost savings, and investment requirements with ROI projections
-🚨 **Risk Assessment**: Top risks with probability percentages and mitigation strategies
-⏱️ **Implementation Priority**: High/Medium/Low priority actions with timeline and resource requirements
-📊 **Decision Matrix**: Clear recommendations with pros/cons and expected outcomes with success probabilities
-
-EXECUTIVE FOCUS: Concise, high-impact insights that support C-level decision making. Emphasize financial metrics, strategic priorities, and actionable decisions with clear ROI and risk profiles.
-
-Present information in executive-friendly format with bullet points, percentages, and clear action items."""
-        )
-
-    def _analyze_question_type(self, question: str) -> str:
-        """Analyze question type for intelligent routing"""
-        question_lower = question.lower()
-        
-        for q_type, keywords in self.question_types.items():
-            if any(keyword in question_lower for keyword in keywords):
-                return q_type
-        
-        return 'general'
-    
-    def _extract_business_intent(self, question: str) -> Tuple[str, List[str]]:
-        """Extract business intent and relevant categories from question"""
-        question_lower = question.lower()
-        detected_categories = []
-        primary_intent = "general_inquiry"
-        
-        # Detect business categories
-        for category, keywords in self.business_keywords.items():
-            if any(keyword in question_lower for keyword in keywords):
-                detected_categories.append(category)
-        
-        # Determine primary intent
-        if 'strategy' in detected_categories or 'competitive' in detected_categories:
-            primary_intent = "strategic_analysis"
-        elif 'performance' in detected_categories or 'analysis' in detected_categories:
-            primary_intent = "performance_analysis"
-        elif 'trends' in detected_categories or 'innovation' in detected_categories:
-            primary_intent = "trend_analysis"
-        elif 'marketing' in detected_categories or 'consumer' in detected_categories:
-            primary_intent = "marketing_analysis"
-        
-        return primary_intent, detected_categories
-    
-    def _enhance_context_retrieval(self, question: str) -> List[Document]:
-        """Enhanced context retrieval with query expansion"""
-        
-        # Get primary documents
-        primary_docs = self.retriever.get_relevant_documents(question)
-        
-        # Extract key terms for query expansion
-        question_terms = re.findall(r'\b\w+\b', question.lower())
-        business_terms = []
-        
-        for term in question_terms:
-            for category, keywords in self.business_keywords.items():
-                if term in keywords:
-                    business_terms.extend(keywords[:3])  # Add related terms
-        
-        # Secondary retrieval with expanded terms
-        if business_terms:
-            expanded_query = question + " " + " ".join(set(business_terms))
-            secondary_docs = self.retriever.get_relevant_documents(expanded_query)
-            
-            # Combine and deduplicate
-            all_docs = primary_docs + secondary_docs
-            seen_content = set()
-            unique_docs = []
-            
-            for doc in all_docs:
-                content_hash = hash(doc.page_content[:100])  # Use first 100 chars as identifier
-                if content_hash not in seen_content:
-                    seen_content.add(content_hash)
-                    unique_docs.append(doc)
-                    
-            return unique_docs[:12]  # Return top 12 unique documents
-        
-        return primary_docs[:8]  # Return top 8 if no expansion needed
-
-    def _is_business_related_query(self, question: str) -> bool:
-        """Enhanced business query validation"""
-        question_lower = question.lower()
-        
-        # Check for direct business keywords
-        for category, keywords in self.business_keywords.items():
-            if any(keyword in question_lower for keyword in keywords):
-                return True
-        
-        # Check for business question patterns
-        business_patterns = [
-            'how to improve', 'what strategy', 'best practices', 'market analysis',
-            'consumer insights', 'brand performance', 'campaign effectiveness',
-            'competitive advantage', 'growth opportunities', 'business impact'
-        ]
-        
-        for pattern in business_patterns:
-            if pattern in question_lower:
-                return True
-        
-        # Check if question has business context (length and complexity)
-        if len(question.split()) > 4 and any(word in question_lower for word in 
-            ['business', 'market', 'customer', 'brand', 'product', 'service', 'company']):
-            return True
-        
-        return False
-
-    def _generate_smart_response(self, question: str) -> str:
-        """Generate intelligent response for out-of-scope queries"""
-        intent, categories = self._extract_business_intent(question)
-        
-        response = f"""🤖 **ConvoTrack Business Intelligence Specialist**
-
-I noticed your question: "{question}"
-
-While I specialize in business intelligence from ConvoTrack case studies, I can help you reframe this question to get actionable insights.
-
-**Here's how I can help:**"""
-
-        if categories:
-            response += f"\n\n**Detected business areas**: {', '.join(categories)}"
-            response += f"\n\n**Suggested business questions:**"
-            
-            if 'marketing' in categories:
-                response += "\n• What marketing strategies show the highest engagement rates?"
-                response += "\n• How do different content types perform across demographics?"
-            
-            if 'consumer' in categories:
-                response += "\n• What consumer behavior patterns emerge from the case studies?"
-                response += "\n• Which demographic segments show the strongest brand loyalty?"
-            
-            if 'performance' in categories:
-                response += "\n• What metrics indicate successful campaigns in our case studies?"
-                response += "\n• How do conversion rates vary across different platforms?"
-        else:
-            response += """
-
-**My expertise areas:**
-• Consumer Behavior Analysis & Market Trends
-• Brand Performance & Marketing Effectiveness  
-• Strategic Business Insights & Competitive Analysis
-• Social Media & Digital Marketing Analytics
-• Product Innovation & Market Research
-
-**Try asking:**
-• "What are the most effective marketing strategies for beauty brands?"
-• "How do consumer preferences vary across different age groups?"
-• "What trends are driving growth in the food industry?"
-• "Which social media platforms show the best ROI?"
-
-Ready to provide actionable business intelligence! 🚀"""
-        
-        return response
-    
-    def ask_with_analysis_type(self, question: str, analysis_type: str = "default") -> Dict[str, Any]:
-        """Enhanced ask method that uses specific prompts based on analysis type"""
+    def ask(self, question: str) -> Dict[str, Any]:
+        """
+        The primary method for the Manager Agent. It orchestrates the entire
+        multi-agent workflow from question to final answer.
+        """
         try:
-            # Clean and validate the question
             clean_question = question.strip()
-            
             if not clean_question:
-                return {
-                    "question": "Empty question",
-                    "answer": "🤖 Please provide a specific business question. I'm ready to analyze consumer insights, marketing strategies, and business trends from our case studies!",
-                    "sources": [],
-                    "agent_type": "validation_response",
-                    "confidence": "low"
-                }
+                return {"answer": "Please provide a question.", "sources": [], "agent_type": "error", "confidence": "low", "analysis_type": "none"}
+
+            # Step 1: Manager determines the user's intent.
+            analysis_type = self._get_analysis_type(clean_question)
             
-            # Select prompt based on analysis type
-            prompt_map = {
-                "strategic": self.strategic_prompt,
-                "trends": self.trend_prompt,
-                "comparative": self.comparison_prompt,
-                "executive": self.executive_prompt,
-                "default": self.default_prompt
-            }
+            # Step 2: Manager delegates the research task.
+            context_docs = self.research_agent.gather_context(clean_question)
+            if not context_docs:
+                return {"answer": "I could not find any relevant information in the knowledge base to answer this question.", "sources": [], "agent_type": "no_context", "confidence": "low", "analysis_type": analysis_type}
             
-            selected_prompt = prompt_map.get(analysis_type, self.default_prompt)
+            # Step 3: Manager delegates the analysis task.
+            raw_analysis = self.analysis_agent.generate_analysis(clean_question, context_docs, analysis_type)
             
-            # Create specialized QA chain with selected prompt
-            specialized_qa_chain = RetrievalQA.from_chain_type(
-                llm=self.llm,
-                chain_type="stuff",
-                retriever=self.retriever,
-                chain_type_kwargs={
-                    "prompt": selected_prompt
-                },
-                return_source_documents=True
-            )
+            # Step 4: Manager delegates the final response formatting.
+            formatted_answer = self.synthesizer_agent.craft_final_response(raw_analysis, analysis_type)
             
-            # Get the enhanced response
-            result = specialized_qa_chain({"query": clean_question})
-            
-            # Enhanced response formatting with analysis type context
-            enhanced_answer = self._format_specialized_response(result["result"], analysis_type)
-            
-            # Create detailed source information
-            sources_list = []
-            for doc in result.get("source_documents", []):
-                relevance_score = len([kw for category in self.business_keywords.values()
-                                       for kw in category if kw in doc.page_content.lower()])
-                relevance = "High" if relevance_score >= 3 else "Medium" if relevance_score >= 1 else "Low"
-                
-                source_info = {
-                    "content": doc.page_content,
-                    "url": doc.metadata.get("source", "Unknown"),
-                    "article_number": doc.metadata.get("article_number", "N/A"),
-                    "relevance": relevance,
-                }
-                sources_list.append(source_info)
-            
+            # Step 5: Manager compiles the final result from all agents' work.
+            sources_list = [{
+                "content": doc.page_content,
+                "url": doc.metadata.get("source", "Unknown"),
+                "article_number": doc.metadata.get("article_number", "N/A"),
+            } for doc in context_docs]
+
             return {
                 "question": clean_question,
-                "answer": enhanced_answer,
+                "answer": formatted_answer,
                 "sources": sources_list,
                 "agent_type": f"{analysis_type}_analysis",
                 "confidence": "high",
                 "analysis_type": analysis_type
             }
-            
+
         except Exception as e:
+            print(f"Error in multi-agent workflow: {e}")
             return {
                 "question": question,
-                "answer": f"⚠️ Analysis Error: {str(e)}. Please try rephrasing your question or check your API configuration.",
-                "sources": [],
-                "agent_type": "error_response",
-                "confidence": "low",
-                "error": str(e)
+                "answer": f"The multi-agent system encountered an error: {str(e)}",
+                "sources": [], "agent_type": "error_response", "confidence": "low",
+                "analysis_type": "error", "error": str(e)
             }
-    
-    def _format_specialized_response(self, answer: str, analysis_type: str) -> str:
-        """Format response with analysis type specific enhancements"""
-        type_headers = {
-            "strategic": "🎯 **STRATEGIC BUSINESS ANALYSIS**\n",
-            "trends": "📈 **TREND ANALYSIS & FUTURE OUTLOOK**\n", 
-            "comparative": "📊 **COMPARATIVE MARKET ANALYSIS**\n",
-            "executive": "📋 **EXECUTIVE BUSINESS BRIEF**\n",
-            "default": "💼 **BUSINESS INTELLIGENCE ANALYSIS**\n"
-        }
-        
-        header = type_headers.get(analysis_type, type_headers["default"])
-        
-        # Add analysis type specific footer
-        footers = {
-            "strategic": "\n\n---\n*Strategic analysis focused on long-term positioning and competitive advantage*",
-            "trends": "\n\n---\n*Trend analysis with forward-looking insights and market evolution*",
-            "comparative": "\n\n---\n*Comparative analysis with performance benchmarks and market positioning*",
-            "executive": "\n\n---\n*Executive summary designed for C-level decision making*",
-        }
-        
-        footer = footers.get(analysis_type, "")
-        
-        return header + answer + footer
 
-    def ask(self, question: str) -> Dict[str, Any]:
-        """Advanced question processing with intelligent routing and enhanced responses"""
-        try:
-            # Clean and validate the question
-            clean_question = question.strip()
-            
-            if not clean_question:
-                return {
-                    "question": "Empty question",
-                    "answer": "🤖 Please provide a specific business question. I'm ready to analyze consumer insights, marketing strategies, and business trends from our case studies!",
-                    "sources": [],
-                    "agent_type": "validation_response",
-                    "confidence": "low"
-                }
-            
-            # Extract business intent and categories
-            intent, categories = self._extract_business_intent(clean_question)
-            question_type = self._analyze_question_type(clean_question)
-            
-            # Check if question is business-related
-            if not self._is_business_related_query(clean_question):
-                return {
-                    "question": clean_question,
-                    "answer": self._generate_smart_response(clean_question),
-                    "sources": [],
-                    "agent_type": "scope_guidance",
-                    "confidence": "medium",
-                    "intent": intent,
-                    "categories": categories
-                }
-            
-            # Enhanced context retrieval
-            enhanced_docs = self._enhance_context_retrieval(clean_question)
-            
-            # Select appropriate prompt based on question type
-            if question_type == 'comparison':
-                prompt = self.comparison_prompt
-            elif question_type == 'trend' or intent == 'trend_analysis':
-                prompt = self.trend_prompt
-            else:
-                prompt = self.default_prompt
-            
-            # Create enhanced QA chain with selected prompt
-            enhanced_qa_chain = RetrievalQA.from_chain_type(
-                llm=self.llm,
-                chain_type="stuff",
-                retriever=self.retriever,
-                chain_type_kwargs={
-                    "prompt": prompt
-                },
-                return_source_documents=True
-            )
-            
-            # Process the business-related question
-            result = enhanced_qa_chain({"query": clean_question})
-            
-            # Calculate confidence based on source relevance
-            confidence = "high" if len(result.get("source_documents", [])) >= 5 else "medium"
-            
-            # Enhance the answer with context and agent personality
-            enhanced_answer = f"""{result['result']}
-
----
-**📊 Analysis Metadata:**
-• Intent: {intent.replace('_', ' ').title()}
-• Categories: {', '.join(categories) if categories else 'General Business'}
-• Question Type: {question_type.replace('_', ' ').title()}
-• Confidence Level: {confidence.upper()}
-• Sources Analyzed: {len(result.get("source_documents", []))} case study segments
-
-*🤖 Analysis by {self.agent_name} | Specialized in Consumer Research & Business Strategy*"""
-            
-            # Format the response
-            response = {
-                "question": clean_question,
-                "answer": enhanced_answer,
-                "sources": [],
-                "agent_type": "advanced_analysis",
-                "confidence": confidence,
-                "intent": intent,
-                "categories": categories,
-                "question_type": question_type
-            }
-            
-            # Add enhanced source information
-            for i, doc in enumerate(result.get("source_documents", []), 1):
-                # Calculate relevance score based on content length and keywords
-                relevance_score = len([kw for category in self.business_keywords.values() 
-                                       for kw in category if kw in doc.page_content.lower()])
-                relevance = "High" if relevance_score >= 3 else "Medium" if relevance_score >= 1 else "Low"
-                
-                source_info = {
-                    "content": doc.page_content,
-                    "url": doc.metadata.get("source", "Unknown"),
-                    "article_number": doc.metadata.get("article_number", f"Source_{i}"),
-                    "relevance": relevance,
-                    "relevance_score": relevance_score,
-                    "content_length": len(doc.page_content)
-                }
-                response["sources"].append(source_info)
-            
-            # Add conversation to history
-            self.conversation_history.append({
-                "question": clean_question,
-                "intent": intent,
-                "categories": categories,
-                "sources_count": len(response["sources"])
-            })
-            
-            return response
-            
-        except Exception as e:
-            return {
-                "question": clean_question if 'clean_question' in locals() else question,
-                "answer": f"""🚨 **Technical Analysis Issue**
-
-I encountered a technical challenge while processing your business question. However, I'm still here to help!
-
-**Error Context:** {str(e)}
-
-**What I can help you with right now:**
-• Market trends and consumer behavior analysis
-• Marketing strategy effectiveness studies  
-• Brand engagement and performance insights
-• Social media and digital marketing analytics
-• Product innovation and competitive analysis
-• Industry-specific research findings
-
-**Quick Business Questions to Try:**
-• "What are the top performing marketing strategies?"
-• "How do consumer preferences differ by demographics?"
-• "What social media trends are most effective?"
-• "Which product features drive the most engagement?"
-
-Let's get you the business intelligence you need! 🎯""",
-                "sources": [],
-                "agent_type": "error_response",
-                "confidence": "low",
-                "error": str(e)
-            }
-    
-    def get_case_study_topics(self) -> List[str]:
-        """Enhanced topic extraction with categorization"""
-        try:
-            from document_loader import DocumentLoader
-            
-            loader = DocumentLoader(self.scraped_articles_path)
-            documents = loader.load_documents()
-            
-            topics = []
-            sources = set()
-            
-            for doc in documents:
-                source = doc.metadata.get("source", "")
-                if source and "case-studies/" in source:
-                    sources.add(source)
-            
-            # Extract and categorize topics
-            for source in sources:
-                if "case-studies/" in source:
-                    topic = source.split("case-studies/")[-1].replace("/", "").replace("-", " ").title()
-                    
-                    # Add business context to topics
-                    if any(keyword in topic.lower() for keyword in ['beauty', 'skin', 'cosmetic']):
-                        topic = f"🧴 {topic} (Beauty & Skincare)"
-                    elif any(keyword in topic.lower() for keyword in ['food', 'ice cream', 'beverage']):
-                        topic = f"🍦 {topic} (Food & Beverage)"
-                    elif any(keyword in topic.lower() for keyword in ['health', 'wellness', 'fitness']):
-                        topic = f"💪 {topic} (Health & Wellness)"
-                    elif any(keyword in topic.lower() for keyword in ['social', 'media', 'digital']):
-                        topic = f"📱 {topic} (Digital Marketing)"
-                    else:
-                        topic = f"📊 {topic} (Business Analysis)"
-                    
-                    topics.append(topic)
-            
-            return sorted(topics)
-            
-        except Exception as e:
-            print(f"Error getting enhanced topics: {e}")
-            return ["📊 Business Strategy Analysis", "🧴 Beauty & Consumer Trends", "🍦 Food Industry Insights"]
-    
-    def search_similar_content(self, query: str, k: int = 5) -> List[Document]:
-        """Enhanced similarity search with business context"""
-        try:
-            # Use enhanced retrieval for better results
-            docs = self._enhance_context_retrieval(query)
-            return docs[:k]
-        except Exception as e:
-            print(f"Error in enhanced search: {e}")
-            return []
-    
-    def get_conversation_insights(self) -> Dict[str, Any]:
-        """Analyze conversation patterns for insights"""
-        if not self.conversation_history:
-            return {"message": "No conversation history available"}
-        
-        # Analyze question patterns
-        intents = [conv["intent"] for conv in self.conversation_history]
-        categories = []
-        for conv in self.conversation_history:
-            categories.extend(conv.get("categories", []))
-        
-        from collections import Counter
-        intent_counts = Counter(intents)
-        category_counts = Counter(categories)
-        
-        return {
-            "total_questions": len(self.conversation_history),
-            "top_intents": dict(intent_counts.most_common(3)),
-            "top_categories": dict(category_counts.most_common(5)),
-            "avg_sources_per_question": sum(conv["sources_count"] for conv in self.conversation_history) / len(self.conversation_history)
-        }
-
-def main():
-    """Test the advanced Q&A agent"""
+# Main execution block for testing
+if __name__ == "__main__":
     scraped_path = "../extractContent/scraped_articles_selenium"
-    
     try:
-        print("🚀 Initializing Advanced ConvoTrack Business Intelligence Agent...")
-        qa_agent = AdvancedCaseStudyQAAgent(scraped_path)
-        print("✅ Advanced Q&A Agent initialized successfully!")
+        print("🚀 Initializing ConvoTrack Multi-Agent BI System...")
+        manager_agent = AdvancedCaseStudyQAAgent(scraped_path)
+        print("✅ Multi-Agent System initialized successfully!")
         
-        # Test questions
-        test_questions = [
-            "What are the most effective marketing strategies for beauty brands?",
-            "How do consumer preferences compare between different age groups?",
-            "What trends are emerging in the food industry?",
-            "Compare social media engagement rates across platforms",
-            "What metrics indicate successful brand campaigns?"
-        ]
+        test_question = "What is the logical connection between social media engagement strategies and actual consumer purchasing behavior based on the provided case studies?"
+        print(f"\n🧪 Testing with complex question: \"{test_question}\"")
         
-        print(f"\n🧪 Testing with sample questions...")
-        for i, question in enumerate(test_questions[:2], 1):  # Test first 2
-            print(f"\n{'='*60}")
-            print(f"Test {i}: {question}")
-            print(f"{'='*60}")
-            
-            response = qa_agent.ask(question)
-            print(f"Intent: {response.get('intent', 'N/A')}")
-            print(f"Categories: {response.get('categories', 'N/A')}")
-            print(f"Confidence: {response.get('confidence', 'N/A')}")
-            print(f"Sources: {len(response.get('sources', []))}")
-            print(f"\nAnswer Preview: {response['answer'][:200]}...")
+        response = manager_agent.ask(test_question)
         
-        # Show conversation insights
-        insights = qa_agent.get_conversation_insights()
-        print(f"\n📊 Conversation Insights: {insights}")
+        print("\n--- FINAL RESPONSE ---")
+        print(f"Answer: \n{response['answer']}")
+        print(f"\nSources Found: {len(response['sources'])}")
+        print("--------------------")
         
     except Exception as e:
-        print(f"❌ Error: {e}")
-
-if __name__ == "__main__":
-    main()
+        print(f"❌ Error during agent test: {e}")
