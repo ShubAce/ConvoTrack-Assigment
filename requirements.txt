@@ -12,3 +12,7 @@ langchain-pinecone
 pinecone-client
 langchain-huggingface
 plotly
+fastapi
+uvicorn
+python-multipart
+pydantic

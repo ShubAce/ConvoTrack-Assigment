@@ -1,6 +1,6 @@
 import streamlit as st
 import os
-from qa_agent.qa_agent import AdvancedCaseStudyQAAgent
+from qa_agent_ai import AdvancedCaseStudyQAAgent
 from dotenv import load_dotenv
 import json
 import pandas as pd
