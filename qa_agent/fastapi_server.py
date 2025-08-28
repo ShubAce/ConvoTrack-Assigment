@@ -29,16 +29,29 @@ class QuestionRequest(BaseModel):
     question: str
     analysis_type: Optional[str] = "default"
 
+# 1. Create a new model to represent a single source object
+class Source(BaseModel):
+    content: str
+    url: str
+    article_number: str
+    relevance: str
+    relevance_score: Optional[int] = None
+    content_length: Optional[int] = None
+
+
+# 2. Update QuestionResponse to use a list of the new Source model
 class QuestionResponse(BaseModel):
     question: str
     answer: str
-    sources: List[str]  # Changed from List[Dict[str, Any]] to List[str]
+    sources: List[Source] # <--- THE FIX IS HERE
     agent_type: str
     confidence: str
-    intent: Optional[str] = None
-    categories: Optional[List[str]] = None
-    question_type: Optional[str] = None
-    analysis_type: Optional[str] = None
+    analysis_type: str
+
+# You might also want a model for the incoming request
+class QuestionRequest(BaseModel):
+    question: str
+    analysis_type: str = "default"
 
 class TopicsResponse(BaseModel):
     topics: List[str]

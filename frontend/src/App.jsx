@@ -128,24 +128,13 @@ function App() {
 				analysis_type: analysisType.id,
 			});
 
-			// MOCK DATA: Assuming API returns sources as an array of objects
-			// To demonstrate the feature, we'll format the sources here.
-			// In a real app, the backend should send this structure.
-			const formattedSources = (response.data.sources || []).map((source) => {
-				if (typeof source === "string") {
-					return {
-						url: source,
-						snippet: "This is a brief summary of the content found at the source URL, explaining its relevance to the answer.",
-					};
-				}
-				return source; // Assumes it's already in {url, snippet} format
-			});
+			const responseSources = response.data.sources || [];
 
 			const botMessage = {
 				id: Date.now() + 1,
 				type: "bot",
 				content: response.data.answer,
-				sources: formattedSources,
+				sources: responseSources,
 				confidence: response.data.confidence,
 				analysisType: analysisType,
 				timestamp: new Date(),
@@ -153,8 +142,8 @@ function App() {
 
 			setMessages((prev) => [...prev, botMessage]);
 
-			if (formattedSources.length > 0) {
-				setSelectedMessageSources(formattedSources);
+			if (responseSources.length > 0) {
+				setSelectedMessageSources(responseSources);
 				setExpandedSourceIndex(null); // Reset accordion on new message
 				if (window.innerWidth < 1024) {
 					setIsSidebarOpen(true);
@@ -236,8 +225,10 @@ function App() {
 											className="overflow-hidden"
 										>
 											<div className="p-3 border-t border-gray-200 text-sm text-gray-700 bg-white">
-												<p className="font-semibold mb-2">Key takeaway:</p>
-												<p className="text-xs italic">"{source.snippet}"</p>
+												<p className="font-semibold mb-2">Extracted Content:</p>
+												<pre className="text-xs whitespace-pre-wrap font-sans bg-gray-100 p-2 rounded-md max-h-48 overflow-y-auto">
+													{source.content}
+												</pre>
 												<a
 													href={source.url}
 													target="_blank"

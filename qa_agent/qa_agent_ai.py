@@ -402,10 +402,25 @@ Ready to provide actionable business intelligence! 🚀"""
             # Enhanced response formatting with analysis type context
             enhanced_answer = self._format_specialized_response(result["result"], analysis_type)
             
+            # Create detailed source information
+            sources_list = []
+            for doc in result.get("source_documents", []):
+                relevance_score = len([kw for category in self.business_keywords.values()
+                                       for kw in category if kw in doc.page_content.lower()])
+                relevance = "High" if relevance_score >= 3 else "Medium" if relevance_score >= 1 else "Low"
+                
+                source_info = {
+                    "content": doc.page_content,
+                    "url": doc.metadata.get("source", "Unknown"),
+                    "article_number": doc.metadata.get("article_number", "N/A"),
+                    "relevance": relevance,
+                }
+                sources_list.append(source_info)
+            
             return {
                 "question": clean_question,
                 "answer": enhanced_answer,
-                "sources": [doc.metadata.get('source', 'Unknown') for doc in result.get("source_documents", [])],
+                "sources": sources_list,
                 "agent_type": f"{analysis_type}_analysis",
                 "confidence": "high",
                 "analysis_type": analysis_type
@@ -533,12 +548,12 @@ Ready to provide actionable business intelligence! 🚀"""
             for i, doc in enumerate(result.get("source_documents", []), 1):
                 # Calculate relevance score based on content length and keywords
                 relevance_score = len([kw for category in self.business_keywords.values() 
-                                     for kw in category if kw in doc.page_content.lower()])
+                                       for kw in category if kw in doc.page_content.lower()])
                 relevance = "High" if relevance_score >= 3 else "Medium" if relevance_score >= 1 else "Low"
                 
                 source_info = {
-                    "content": doc.page_content[:400] + "..." if len(doc.page_content) > 400 else doc.page_content,
-                    "source_url": doc.metadata.get("source", "Unknown"),
+                    "content": doc.page_content,
+                    "url": doc.metadata.get("source", "Unknown"),
                     "article_number": doc.metadata.get("article_number", f"Source_{i}"),
                     "relevance": relevance,
                     "relevance_score": relevance_score,
