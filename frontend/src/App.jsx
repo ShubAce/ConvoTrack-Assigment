@@ -391,7 +391,7 @@ function App() {
 									value={inputValue}
 									onChange={(e) => setInputValue(e.target.value)}
 									placeholder="Ask an intelligent business question..."
-									className="flex-1 px-4 py-3 border border-gray-300 bg-gray-50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+									className="flex-1 text-gray-600 px-4 py-3 border border-gray-300 bg-gray-50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
 									disabled={isLoading}
 								/>
 								<motion.button
