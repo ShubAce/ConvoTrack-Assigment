@@ -277,12 +277,12 @@ Category ID:"""
 if __name__ == "__main__":
     scraped_path = "../extractContent/scraped_articles_selenium"
     try:
-        print("🚀 Initializing ConvoTrack Multi-Agent BI System...")
+        print("Initializing ConvoTrack Multi-Agent BI System...")
         manager_agent = AdvancedCaseStudyQAAgent(scraped_path)
-        print("✅ Multi-Agent System initialized successfully!")
+        print("Multi-Agent System initialized successfully!")
         
         test_question = "What is the logical connection between social media engagement strategies and actual consumer purchasing behavior based on the provided case studies?"
-        print(f"\n🧪 Testing with complex question: \"{test_question}\"")
+        print(f"\nTesting with complex question: \"{test_question}\"")
         
         response = manager_agent.ask(test_question)
         
@@ -292,4 +292,4 @@ if __name__ == "__main__":
         print("--------------------")
         
     except Exception as e:
-        print(f"❌ Error during agent test: {e}")
+        print(f"Error during agent test: {e}")

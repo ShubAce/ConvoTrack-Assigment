@@ -29,7 +29,6 @@ app.add_middleware(
 class QuestionRequest(BaseModel):
     """The request model for an incoming user question."""
     question: str
-    # No longer needs analysis_type, as the agent is autonomous
 
 class QuestionResponse(BaseModel):
     """The response model for an AI-generated answer."""
@@ -62,13 +61,13 @@ async def startup_event():
     """
     global qa_agent
     try:
-        print("🚀 Initializing ConvoTrack QA Agent...")
+        print("Initializing ConvoTrack QA Agent...")
         # Path to the scraped articles that form the knowledge base
         scraped_path = "../extractContent/scraped_articles_selenium"
         qa_agent = AdvancedCaseStudyQAAgent(scraped_path)
-        print("✅ QA Agent initialized successfully!")
+        print("QA Agent initialized successfully!")
     except Exception as e:
-        print(f"❌ Failed to initialize QA Agent: {e}")
+        print(f"Failed to initialize QA Agent: {e}")
         qa_agent = None
 
 # --- API Endpoints ---
@@ -98,7 +97,7 @@ async def ask_question(request: QuestionRequest):
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
     
     try:
-        print(f"🔍 Processing question: '{request.question[:100]}...'")
+        print(f"Processing question: '{request.question[:100]}...'")
         loop = asyncio.get_event_loop()
         
         # Run the synchronous qa_agent.ask method in the thread pool executor
@@ -108,13 +107,13 @@ async def ask_question(request: QuestionRequest):
             request.question
         )
         
-        print(f"✅ Successfully processed question. AI chose '{response.get('analysis_type')}' analysis.")
+        print(f"Successfully processed question. AI chose '{response.get('analysis_type')}' analysis.")
         return QuestionResponse(**response)
     
     except Exception as e:
         import traceback
-        print(f"❌ Error processing question: {str(e)}")
-        print(f"📋 Full traceback:\n{traceback.format_exc()}")
+        print(f"Error processing question: {str(e)}")
+        print(f"Full traceback:\n{traceback.format_exc()}")
         raise HTTPException(
             status_code=500, 
             detail=f"An internal error occurred while processing the question."
