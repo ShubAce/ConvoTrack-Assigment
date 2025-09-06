@@ -9,10 +9,8 @@ from langchain_groq import ChatGroq
 from langchain_pinecone import PineconeVectorStore
 from document_loader import setup_knowledge_base
 
-# Load environment variables from a .env file
 load_dotenv()
 
-# --- WORKER AGENT DEFINITIONS ---
 
 class ResearchAgent:
     """
@@ -25,7 +23,6 @@ class ResearchAgent:
     def gather_context(self, question: str) -> List[Document]:
         """
         Performs a similarity search on the vector store to find relevant documents.
-        This could be expanded with more advanced techniques like query expansion.
         """
         print("Research Agent: Gathering context from knowledge base...")
         return self.retriever.get_relevant_documents(question)
@@ -59,8 +56,7 @@ class AnalysisAgent:
 
 class SynthesizerAgent:
     """
-    Specialized agent for formatting and polishing the raw analysis into a
-    final, user-friendly response.
+    Specialized agent for formatting and polishing the raw analysis into a final, user-friendly response.
     """
     def craft_final_response(self, raw_analysis: str, analysis_type: str) -> str:
         """
@@ -70,11 +66,11 @@ class SynthesizerAgent:
         print("Synthesizer Agent: Formatting final response...")
         
         type_headers = {
-            "strategic": "🎯 **Detailed Strategic Business Analysis**\n",
-            "trends": "📈 **In-Depth Trend Analysis & Future Outlook**\n", 
-            "comparative": "📊 **Comprehensive Comparative Market Analysis**\n",
-            "executive": "📋 **Actionable Executive Business Brief**\n",
-            "default": "💼 **Detailed Business Intelligence Analysis**\n"
+            "strategic": "**Detailed Strategic Business Analysis**\n",
+            "trends": "**In-Depth Trend Analysis & Future Outlook**\n", 
+            "comparative": "**Comprehensive Comparative Market Analysis**\n",
+            "executive": "**Actionable Executive Business Brief**\n",
+            "default": "**Detailed Business Intelligence Analysis**\n"
         }
         header = type_headers.get(analysis_type, type_headers["default"])
         
@@ -88,7 +84,6 @@ class SynthesizerAgent:
         
         return header + raw_analysis + footer
 
-# --- MANAGER AGENT ---
 
 class AdvancedCaseStudyQAAgent:
     """
@@ -101,7 +96,7 @@ class AdvancedCaseStudyQAAgent:
         Initializes the entire multi-agent system, including the LLM,
         vector store, and all worker agents.
         """
-        self.agent_name = "ConvoTrack Multi-Agent BI System"
+        self.agent_name = "ConvoTrack Multi-Agent System"
         
         # Initialize the Groq Language Model
         api_key = groq_api_key or os.getenv("GROQ_API_KEY")
@@ -110,15 +105,15 @@ class AdvancedCaseStudyQAAgent:
         
         self.llm = ChatGroq(
             groq_api_key=api_key,
-            temperature=0.2, # Lower temperature for more logical and fact-based outputs
-            model_name="llama3-70b-8192",
+            temperature=0.2, 
+            model_name="llama-3.3-70b-versatile",
         )
         
         # Set up the knowledge base and retriever
         self.vectorstore = setup_knowledge_base(scraped_articles_path)
         self.retriever = self.vectorstore.as_retriever(
             search_type="similarity",
-            search_kwargs={"k": 15}  # Increase K to gather more context for detailed analysis
+            search_kwargs={"k": 15}  
         )
         
         # Create and store all necessary prompt templates
@@ -132,7 +127,6 @@ class AdvancedCaseStudyQAAgent:
     def _create_prompt_templates(self) -> Dict[str, PromptTemplate]:
         """
         Creates and returns a dictionary of all specialized prompt templates.
-        These are enhanced for more detailed and logical reasoning.
         """
         # Router prompt to classify the user's question
         router_template = PromptTemplate(
@@ -273,23 +267,3 @@ Category ID:"""
                 "analysis_type": "error", "error": str(e)
             }
 
-# Main execution block for testing
-if __name__ == "__main__":
-    scraped_path = "../extractContent/scraped_articles_selenium"
-    try:
-        print("Initializing ConvoTrack Multi-Agent BI System...")
-        manager_agent = AdvancedCaseStudyQAAgent(scraped_path)
-        print("Multi-Agent System initialized successfully!")
-        
-        test_question = "What is the logical connection between social media engagement strategies and actual consumer purchasing behavior based on the provided case studies?"
-        print(f"\nTesting with complex question: \"{test_question}\"")
-        
-        response = manager_agent.ask(test_question)
-        
-        print("\n--- FINAL RESPONSE ---")
-        print(f"Answer: \n{response['answer']}")
-        print(f"\nSources Found: {len(response['sources'])}")
-        print("--------------------")
-        
-    except Exception as e:
-        print(f"Error during agent test: {e}")
